@@ -5,30 +5,38 @@ using UnityEngine.InputSystem;
 
 public class MovementByHeadGame : MonoBehaviour
 {
-    public GameObject obstaclePrefab;
+    public GameObject[] obstaclePrefabs;
     public GameObject groundBlockPrefab;
+    public GameObject[] sceneryPrefabs;
 
     public bool invertAxis = false;
-    public float aspectMultiplier = 1.5f;
+    public float aspectMultiplier = 3.5f;
     public float smoothSpeed = 25f;
     public float maxLimitX = 2.0f;
-
     public float speed = 15f;
     public float laneDistance = 1.2f;
-
     public float groundWidthMultiplier = 1.5f;
-
-    public float groundBlockLength = 1.4f;
-
+    public float groundBlockLength = 0.8f;
     public float groundYOffset = -0.8f;
+    public float obstacleYOffset = 0.8f;
+    public float tallObstacleYOffset = 2.0f;
 
-    public float obstacleYOffset = 1.2f;
+    public float tiltMultiplier = 15f;
+
+    public float spawnDistance = 55f;
+    public float scenerySpawnDistance = 3.5f;
 
     public float spawnTimer = 0f;
     public bool isGameOver = false;
+
     public List<Transform> obstacles = new List<Transform>();
     public List<Transform> groundBlocks = new List<Transform>();
+    public List<Transform> sceneries = new List<Transform>();
+
+    private Dictionary<Transform, Vector3> originalScales = new Dictionary<Transform, Vector3>();
+
     private float groundSpawnTimer = 0f;
+    private float scenerySpawnTimer = 0f;
 
     private int lastLane = -1;
     private float distanceTraveled = 0f;
@@ -57,6 +65,45 @@ public class MovementByHeadGame : MonoBehaviour
         camRight.y = 0;
         if (camRight.sqrMagnitude < 0.01f) camRight = Vector3.right;
         camRight.Normalize();
+
+        PreSpawnGround();
+    }
+
+    private void PreSpawnGround()
+    {
+        int blocksNeeded = Mathf.CeilToInt((spawnDistance + 10f) / groundBlockLength);
+        float groundY = fixedGroundY + groundYOffset;
+        float[] laneOffsets = new float[] { -laneDistance, 0f, laneDistance };
+
+        for (int i = 0; i < blocksNeeded; i++)
+        {
+            float currentZDistance = i * groundBlockLength;
+
+            foreach (float offset in laneOffsets)
+            {
+                Vector3 spawnPos = startPos + (camForward * currentZDistance) + (camRight * offset);
+                spawnPos.y = groundY;
+
+                GameObject groundBlock;
+                if (groundBlockPrefab != null)
+                {
+                    groundBlock = Instantiate(groundBlockPrefab, spawnPos, groundBlockPrefab.transform.rotation);
+                    Vector3 newScale = groundBlock.transform.localScale;
+                    newScale.x *= groundWidthMultiplier;
+                    groundBlock.transform.localScale = newScale;
+                }
+                else
+                {
+                    groundBlock = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    groundBlock.transform.position = spawnPos;
+                    groundBlock.transform.localScale = new Vector3(laneDistance, 0.2f, groundBlockLength);
+                    Destroy(groundBlock.GetComponent<Collider>());
+                }
+
+                groundBlocks.Add(groundBlock.transform);
+                Destroy(groundBlock, 10f);
+            }
+        }
     }
 
     public void Update()
@@ -81,12 +128,17 @@ public class MovementByHeadGame : MonoBehaviour
         if (invertAxis) faceX = 1f - faceX;
 
         float targetOffset = ((faceX - 0.5f) * aspectMultiplier) * 6f;
-        targetOffset = Mathf.Clamp(targetOffset, -maxLimitX, maxLimitX);
+        targetOffset = Mathf.Clamp(targetOffset, -laneDistance, laneDistance);
 
         Vector3 targetPos = startPos + (camRight * targetOffset);
         targetPos.y = transform.position.y;
 
         transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * smoothSpeed);
+
+        float movementDeltaX = targetPos.x - transform.position.x;
+        float targetTiltAngle = movementDeltaX * -tiltMultiplier;
+        Quaternion targetRotation = Quaternion.Euler(0, 0, targetTiltAngle);
+        transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, Time.deltaTime * 10f);
 
         float groundY = fixedGroundY + groundYOffset;
 
@@ -100,17 +152,28 @@ public class MovementByHeadGame : MonoBehaviour
             lastLane = lane;
 
             float xMult = lane - 1f;
-            Vector3 spawnPos = startPos + (camForward * 35f) + (camRight * (xMult * laneDistance));
+            Vector3 spawnPos = startPos + (camForward * spawnDistance) + (camRight * (xMult * laneDistance));
 
-            spawnPos.y = groundY + obstacleYOffset;
+            GameObject obs = null;
 
-            GameObject obs;
-            if (obstaclePrefab != null)
+            if (obstaclePrefabs != null && obstaclePrefabs.Length > 0)
             {
-                obs = Instantiate(obstaclePrefab, spawnPos, obstaclePrefab.transform.rotation);
+                GameObject selectedPrefab = obstaclePrefabs[Random.Range(0, obstaclePrefabs.Length)];
+                if (selectedPrefab != null)
+                {
+                    float currentOffset = obstacleYOffset;
+                    if (selectedPrefab.name.ToLower().Contains("tall"))
+                    {
+                        currentOffset = tallObstacleYOffset;
+                    }
+                    spawnPos.y = groundY + currentOffset;
+                    obs = Instantiate(selectedPrefab, spawnPos, selectedPrefab.transform.rotation);
+                }
             }
-            else
+
+            if (obs == null)
             {
+                spawnPos.y = groundY + obstacleYOffset;
                 obs = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 obs.transform.position = spawnPos + Vector3.up * 0.75f;
                 obs.transform.localScale = Vector3.one * 1.5f;
@@ -120,9 +183,20 @@ public class MovementByHeadGame : MonoBehaviour
             Collider col = obs.GetComponent<Collider>();
             if (col != null) Destroy(col);
 
+            RegisterAndScaleObject(obs.transform);
             obstacles.Add(obs.transform);
-            Destroy(obs, 8f);
+            Destroy(obs, 10f);
             spawnTimer = 0f;
+        }
+
+        scenerySpawnTimer += Time.deltaTime;
+        float currentScenerySpawnInterval = Mathf.Max(0.2f, 10f / speed);
+
+        if (scenerySpawnTimer > currentScenerySpawnInterval)
+        {
+            SpawnScenery(-scenerySpawnDistance);
+            SpawnScenery(scenerySpawnDistance);
+            scenerySpawnTimer = 0f;
         }
 
         groundSpawnTimer += Time.deltaTime;
@@ -134,14 +208,13 @@ public class MovementByHeadGame : MonoBehaviour
 
             foreach (float offset in laneOffsets)
             {
-                Vector3 spawnPos = startPos + (camForward * 35f) + (camRight * offset);
+                Vector3 spawnPos = startPos + (camForward * spawnDistance) + (camRight * offset);
                 spawnPos.y = groundY;
 
                 GameObject groundBlock;
                 if (groundBlockPrefab != null)
                 {
                     groundBlock = Instantiate(groundBlockPrefab, spawnPos, groundBlockPrefab.transform.rotation);
-
                     Vector3 newScale = groundBlock.transform.localScale;
                     newScale.x *= groundWidthMultiplier;
                     groundBlock.transform.localScale = newScale;
@@ -155,41 +228,104 @@ public class MovementByHeadGame : MonoBehaviour
                 }
 
                 groundBlocks.Add(groundBlock.transform);
-                Destroy(groundBlock, 8f);
+                Destroy(groundBlock, 10f);
             }
 
             groundSpawnTimer -= currentGroundSpawnInterval;
             if (groundSpawnTimer > currentGroundSpawnInterval) groundSpawnTimer = 0f;
         }
 
-        for (int i = groundBlocks.Count - 1; i >= 0; i--)
+        MoveList(groundBlocks, false, false);
+        MoveList(obstacles, true, true);
+        MoveList(sceneries, false, true);
+    }
+
+    private void MoveList(List<Transform> list, bool checkCollision, bool applyScale)
+    {
+        for (int i = list.Count - 1; i >= 0; i--)
         {
-            if (groundBlocks[i] == null) { groundBlocks.RemoveAt(i); continue; }
-            groundBlocks[i].Translate(-camForward * speed * Time.deltaTime, Space.World);
-        }
-
-        for (int i = obstacles.Count - 1; i >= 0; i--)
-        {
-            if (obstacles[i] == null) { obstacles.RemoveAt(i); continue; }
-            obstacles[i].Translate(-camForward * speed * Time.deltaTime, Space.World);
-
-            Vector3 distOffset = transform.position - obstacles[i].position;
-            float distSide = Mathf.Abs(Vector3.Dot(distOffset, camRight));
-            float distForward = Mathf.Abs(Vector3.Dot(distOffset, camForward));
-            float distUp = Mathf.Abs(distOffset.y);
-
-            if (distSide < 0.9f && distUp < 1.4f && distForward < 0.9f)
+            Transform obj = list[i];
+            if (obj == null)
             {
-                isGameOver = true;
-                int finalScore = Mathf.FloorToInt(currentScore);
-                if (finalScore > maxScore)
+                list.RemoveAt(i);
+                continue;
+            }
+
+            obj.Translate(-camForward * speed * Time.deltaTime, Space.World);
+
+            if (applyScale)
+            {
+                UpdateObjectScale(obj);
+            }
+
+            if (checkCollision)
+            {
+                Vector3 distOffset = transform.position - obj.position;
+                float distSide = Mathf.Abs(Vector3.Dot(distOffset, camRight));
+                float distForward = Mathf.Abs(Vector3.Dot(distOffset, camForward));
+                float distUp = Mathf.Abs(distOffset.y);
+
+                if (distSide < 0.9f && distUp < 1.4f && distForward < 0.9f)
                 {
-                    maxScore = finalScore;
-                    PlayerPrefs.SetInt("MaxScore", maxScore);
-                    PlayerPrefs.Save();
+                    isGameOver = true;
+                    int finalScore = Mathf.FloorToInt(currentScore);
+                    if (finalScore > maxScore)
+                    {
+                        maxScore = finalScore;
+                        PlayerPrefs.SetInt("MaxScore", maxScore);
+                        PlayerPrefs.Save();
+                    }
                 }
             }
         }
+    }
+
+    private void SpawnScenery(float xOffset)
+    {
+        Vector3 spawnPos = startPos + (camForward * spawnDistance) + (camRight * xOffset);
+        spawnPos.y = fixedGroundY + groundYOffset;
+
+        GameObject scenery = null;
+        if (sceneryPrefabs != null && sceneryPrefabs.Length > 0)
+        {
+            GameObject prefab = sceneryPrefabs[Random.Range(0, sceneryPrefabs.Length)];
+            if (prefab != null)
+            {
+                scenery = Instantiate(prefab, spawnPos, prefab.transform.rotation);
+                scenery.transform.rotation *= Quaternion.Euler(0, Random.Range(0f, 360f), 0);
+            }
+        }
+
+        if (scenery == null)
+        {
+            scenery = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            scenery.transform.position = spawnPos + Vector3.up * 1f;
+            scenery.transform.localScale = new Vector3(0.5f, 2f, 0.5f);
+            scenery.GetComponent<Renderer>().material.color = new Color(0.1f, 0.5f, 0.1f);
+        }
+
+        Destroy(scenery.GetComponent<Collider>());
+        RegisterAndScaleObject(scenery.transform);
+        sceneries.Add(scenery.transform);
+        Destroy(scenery, 10f);
+    }
+
+    private void RegisterAndScaleObject(Transform obj)
+    {
+        originalScales[obj] = obj.localScale;
+        UpdateObjectScale(obj);
+    }
+
+    private void UpdateObjectScale(Transform obj)
+    {
+        if (!originalScales.ContainsKey(obj)) return;
+
+        float distForward = Vector3.Dot(obj.position - transform.position, camForward);
+
+        float t = Mathf.InverseLerp(spawnDistance, spawnDistance - 10f, distForward);
+        t = Mathf.Clamp01(t);
+
+        obj.localScale = originalScales[obj] * t;
     }
 
     private void OnGUI()
@@ -212,7 +348,7 @@ public class MovementByHeadGame : MonoBehaviour
             GUI.skin.label.fontStyle = FontStyle.Normal;
             GUI.Label(new Rect(0, Screen.height / 2f + 90, Screen.width, 50), "Tekrar oynamak için ekrana tıkla");
         }
-        else if (MovementByHead.Instance != null && MovementByHead.Instance.IsCalibrated)
+        else if (MovementByHead.Instance.IsCalibrated)
         {
             GUI.skin.label.alignment = TextAnchor.UpperLeft;
             GUI.skin.label.fontSize = 28;
