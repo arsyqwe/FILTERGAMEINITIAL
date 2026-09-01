@@ -8,6 +8,7 @@ public class MovementByHeadGame : MonoBehaviour
     public GameObject[] obstaclePrefabs;
     public GameObject[] groundBlockPrefabs;
     public GameObject[] sceneryPrefabs;
+    public GameObject[] bushPrefabs;
 
     public bool invertAxis = false;
     public float aspectMultiplier = 3.5f;
@@ -80,7 +81,6 @@ public class MovementByHeadGame : MonoBehaviour
             {
                 Vector3 spawnPos = startPos + (camForward * currentZDistance) + (camRight * offset);
                 spawnPos.y = groundYOffset;
-
                 GameObject groundBlock = null;
 
                 if (groundBlockPrefabs != null && groundBlockPrefabs.Length > 0)
@@ -118,7 +118,6 @@ public class MovementByHeadGame : MonoBehaviour
 
             if (mouseClicked || touched)
             {
-                // YENİ EKLENDİ: Oyun yeniden başlarken zamanı tekrar normal akışına döndür
                 Time.timeScale = 1f;
                 SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
             }
@@ -139,7 +138,6 @@ public class MovementByHeadGame : MonoBehaviour
         targetOffset = Mathf.Clamp(targetOffset, -laneDistance, laneDistance);
 
         Vector3 targetPos = startPos + (camRight * targetOffset);
-
         Vector3 currentPos = transform.position;
         currentPos.x = Mathf.Lerp(currentPos.x, targetPos.x, Time.deltaTime * smoothSpeed);
         transform.position = currentPos;
@@ -148,7 +146,6 @@ public class MovementByHeadGame : MonoBehaviour
         float targetTiltAngle = movementDeltaX * -tiltMultiplier;
         Quaternion targetRotation = Quaternion.Euler(0, 0, targetTiltAngle);
         transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, Time.deltaTime * 10f);
-
 
         spawnTimer += Time.deltaTime;
         float currentSpawnInterval = Mathf.Max(0.4f, 20f / speed);
@@ -161,7 +158,6 @@ public class MovementByHeadGame : MonoBehaviour
 
             float xMult = lane - 1f;
             Vector3 spawnPos = startPos + (camForward * spawnDistance) + (camRight * (xMult * laneDistance));
-
             GameObject obs = null;
 
             if (obstaclePrefabs != null && obstaclePrefabs.Length > 0)
@@ -169,14 +165,8 @@ public class MovementByHeadGame : MonoBehaviour
                 GameObject selectedPrefab = obstaclePrefabs[Random.Range(0, obstaclePrefabs.Length)];
                 if (selectedPrefab != null)
                 {
-                    if (selectedPrefab.name.ToLower().Contains("tall"))
-                    {
-                        spawnPos.y = tallObstacleYOffset;
-                    }
-                    else
-                    {
-                        spawnPos.y = obstacleYOffset;
-                    }
+                    if (selectedPrefab.name.ToLower().Contains("tall")) spawnPos.y = tallObstacleYOffset;
+                    else spawnPos.y = obstacleYOffset;
 
                     obs = Instantiate(selectedPrefab, spawnPos, selectedPrefab.transform.rotation);
                 }
@@ -199,14 +189,28 @@ public class MovementByHeadGame : MonoBehaviour
             Destroy(obs, 10f);
             spawnTimer = 0f;
         }
-
         scenerySpawnTimer += Time.deltaTime;
         float currentScenerySpawnInterval = Mathf.Max(0.2f, 10f / speed);
 
         if (scenerySpawnTimer > currentScenerySpawnInterval)
         {
-            SpawnScenery(-scenerySpawnDistance);
-            SpawnScenery(scenerySpawnDistance);
+            float depthSpread = 12f; 
+            float widthSpread = 4.0f; 
+
+            int treeCount = Random.Range(2, 4);
+            for (int i = 0; i < treeCount; i++)
+            {
+                SpawnScenery(-scenerySpawnDistance - Random.Range(0f, widthSpread), Random.Range(-depthSpread / 2f, depthSpread / 2f));
+                SpawnScenery(scenerySpawnDistance + Random.Range(0f, widthSpread), Random.Range(-depthSpread / 2f, depthSpread / 2f));
+            }
+
+            int bushCount = Random.Range(4, 8);
+            for (int i = 0; i < bushCount; i++)
+            {
+                SpawnBush(-scenerySpawnDistance - Random.Range(-0.5f, widthSpread + 1f), Random.Range(-depthSpread, depthSpread / 2f));
+                SpawnBush(scenerySpawnDistance + Random.Range(-0.5f, widthSpread + 1f), Random.Range(-depthSpread, depthSpread / 2f));
+            }
+
             scenerySpawnTimer = 0f;
         }
 
@@ -220,9 +224,7 @@ public class MovementByHeadGame : MonoBehaviour
             foreach (float offset in laneOffsets)
             {
                 Vector3 spawnPos = startPos + (camForward * spawnDistance) + (camRight * offset);
-
                 spawnPos.y = groundYOffset;
-
                 GameObject groundBlock = null;
 
                 if (groundBlockPrefabs != null && groundBlockPrefabs.Length > 0)
@@ -271,10 +273,7 @@ public class MovementByHeadGame : MonoBehaviour
 
             obj.Translate(-camForward * speed * Time.deltaTime, Space.World);
 
-            if (applyScale)
-            {
-                UpdateObjectScale(obj);
-            }
+            if (applyScale) UpdateObjectScale(obj);
 
             if (checkCollision)
             {
@@ -286,7 +285,6 @@ public class MovementByHeadGame : MonoBehaviour
                 if (distSide < 0.9f && distUp < 1.4f && distForward < 0.9f)
                 {
                     isGameOver = true;
-
                     Time.timeScale = 0f;
 
                     int finalScore = Mathf.FloorToInt(currentScore);
@@ -301,10 +299,9 @@ public class MovementByHeadGame : MonoBehaviour
         }
     }
 
-    private void SpawnScenery(float xOffset)
+    private void SpawnScenery(float xOffset, float zOffset)
     {
-        Vector3 spawnPos = startPos + (camForward * spawnDistance) + (camRight * xOffset);
-
+        Vector3 spawnPos = startPos + (camForward * (spawnDistance + zOffset)) + (camRight * xOffset);
         spawnPos.y = groundYOffset;
 
         GameObject scenery = null;
@@ -318,18 +315,36 @@ public class MovementByHeadGame : MonoBehaviour
             }
         }
 
-        if (scenery == null)
-        {
-            scenery = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            scenery.transform.position = spawnPos;
-            scenery.transform.localScale = new Vector3(0.5f, 2f, 0.5f);
-            scenery.GetComponent<Renderer>().material.color = new Color(0.1f, 0.5f, 0.1f);
-        }
+        if (scenery == null) return;
 
         Destroy(scenery.GetComponent<Collider>());
         RegisterAndScaleObject(scenery.transform);
         sceneries.Add(scenery.transform);
         Destroy(scenery, 10f);
+    }
+
+    private void SpawnBush(float xOffset, float zOffset)
+    {
+        Vector3 spawnPos = startPos + (camForward * (spawnDistance + zOffset)) + (camRight * xOffset);
+        spawnPos.y = groundYOffset;
+
+        GameObject bush = null;
+        if (bushPrefabs != null && bushPrefabs.Length > 0)
+        {
+            GameObject prefab = bushPrefabs[Random.Range(0, bushPrefabs.Length)];
+            if (prefab != null)
+            {
+                bush = Instantiate(prefab, spawnPos, prefab.transform.rotation);
+                bush.transform.rotation *= Quaternion.Euler(0, Random.Range(0f, 360f), 0);
+            }
+        }
+
+        if (bush == null) return;
+
+        Destroy(bush.GetComponent<Collider>());
+        RegisterAndScaleObject(bush.transform);
+        sceneries.Add(bush.transform);
+        Destroy(bush, 10f);
     }
 
     private void RegisterAndScaleObject(Transform obj)
@@ -343,7 +358,6 @@ public class MovementByHeadGame : MonoBehaviour
         if (!originalScales.ContainsKey(obj)) return;
 
         float distForward = Vector3.Dot(obj.position - transform.position, camForward);
-
         float t = Mathf.InverseLerp(spawnDistance, spawnDistance - 10f, distForward);
         t = Mathf.Clamp01(t);
 
