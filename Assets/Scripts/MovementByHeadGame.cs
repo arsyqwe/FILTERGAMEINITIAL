@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 public class MovementByHeadGame : MonoBehaviour
 {
     public GameObject[] obstaclePrefabs;
-    public GameObject groundBlockPrefab;
+    public GameObject[] groundBlockPrefabs;
     public GameObject[] sceneryPrefabs;
 
     public bool invertAxis = false;
@@ -17,12 +17,12 @@ public class MovementByHeadGame : MonoBehaviour
     public float laneDistance = 1.2f;
     public float groundWidthMultiplier = 1.5f;
     public float groundBlockLength = 0.8f;
+
     public float groundYOffset = -0.8f;
-    public float obstacleYOffset = 0.8f;
-    public float tallObstacleYOffset = 2.0f;
+    public float obstacleYOffset = 0.16f;
+    public float tallObstacleYOffset = 0.42f;
 
     public float tiltMultiplier = 15f;
-
     public float spawnDistance = 55f;
     public float scenerySpawnDistance = 3.5f;
 
@@ -42,19 +42,17 @@ public class MovementByHeadGame : MonoBehaviour
     private float distanceTraveled = 0f;
     private float currentScore = 0f;
     private int maxScore = 0;
+
     public float scoreMultiplier = 0.25f;
 
     private Vector3 camForward;
     private Vector3 camRight;
     private Vector3 startPos;
-    private float fixedGroundY;
 
     void Start()
     {
         startPos = transform.position;
         maxScore = PlayerPrefs.GetInt("MaxScore", 0);
-
-        fixedGroundY = transform.position.y - (transform.localScale.y / 2f);
 
         camForward = UnityEngine.Camera.main.transform.forward;
         camForward.y = 0;
@@ -72,7 +70,6 @@ public class MovementByHeadGame : MonoBehaviour
     private void PreSpawnGround()
     {
         int blocksNeeded = Mathf.CeilToInt((spawnDistance + 10f) / groundBlockLength);
-        float groundY = fixedGroundY + groundYOffset;
         float[] laneOffsets = new float[] { -laneDistance, 0f, laneDistance };
 
         for (int i = 0; i < blocksNeeded; i++)
@@ -82,17 +79,23 @@ public class MovementByHeadGame : MonoBehaviour
             foreach (float offset in laneOffsets)
             {
                 Vector3 spawnPos = startPos + (camForward * currentZDistance) + (camRight * offset);
-                spawnPos.y = groundY;
+                spawnPos.y = groundYOffset;
 
-                GameObject groundBlock;
-                if (groundBlockPrefab != null)
+                GameObject groundBlock = null;
+
+                if (groundBlockPrefabs != null && groundBlockPrefabs.Length > 0)
                 {
-                    groundBlock = Instantiate(groundBlockPrefab, spawnPos, groundBlockPrefab.transform.rotation);
-                    Vector3 newScale = groundBlock.transform.localScale;
-                    newScale.x *= groundWidthMultiplier;
-                    groundBlock.transform.localScale = newScale;
+                    GameObject selectedPrefab = groundBlockPrefabs[Random.Range(0, groundBlockPrefabs.Length)];
+                    if (selectedPrefab != null)
+                    {
+                        groundBlock = Instantiate(selectedPrefab, spawnPos, selectedPrefab.transform.rotation);
+                        Vector3 newScale = groundBlock.transform.localScale;
+                        newScale.x *= groundWidthMultiplier;
+                        groundBlock.transform.localScale = newScale;
+                    }
                 }
-                else
+
+                if (groundBlock == null)
                 {
                     groundBlock = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     groundBlock.transform.position = spawnPos;
@@ -113,7 +116,12 @@ public class MovementByHeadGame : MonoBehaviour
             bool mouseClicked = Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
             bool touched = Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame;
 
-            if (mouseClicked || touched) SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            if (mouseClicked || touched)
+            {
+                // YENİ EKLENDİ: Oyun yeniden başlarken zamanı tekrar normal akışına döndür
+                Time.timeScale = 1f;
+                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            }
             return;
         }
 
@@ -131,16 +139,16 @@ public class MovementByHeadGame : MonoBehaviour
         targetOffset = Mathf.Clamp(targetOffset, -laneDistance, laneDistance);
 
         Vector3 targetPos = startPos + (camRight * targetOffset);
-        targetPos.y = transform.position.y;
 
-        transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * smoothSpeed);
+        Vector3 currentPos = transform.position;
+        currentPos.x = Mathf.Lerp(currentPos.x, targetPos.x, Time.deltaTime * smoothSpeed);
+        transform.position = currentPos;
 
         float movementDeltaX = targetPos.x - transform.position.x;
         float targetTiltAngle = movementDeltaX * -tiltMultiplier;
         Quaternion targetRotation = Quaternion.Euler(0, 0, targetTiltAngle);
         transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, Time.deltaTime * 10f);
 
-        float groundY = fixedGroundY + groundYOffset;
 
         spawnTimer += Time.deltaTime;
         float currentSpawnInterval = Mathf.Max(0.4f, 20f / speed);
@@ -161,21 +169,24 @@ public class MovementByHeadGame : MonoBehaviour
                 GameObject selectedPrefab = obstaclePrefabs[Random.Range(0, obstaclePrefabs.Length)];
                 if (selectedPrefab != null)
                 {
-                    float currentOffset = obstacleYOffset;
                     if (selectedPrefab.name.ToLower().Contains("tall"))
                     {
-                        currentOffset = tallObstacleYOffset;
+                        spawnPos.y = tallObstacleYOffset;
                     }
-                    spawnPos.y = groundY + currentOffset;
+                    else
+                    {
+                        spawnPos.y = obstacleYOffset;
+                    }
+
                     obs = Instantiate(selectedPrefab, spawnPos, selectedPrefab.transform.rotation);
                 }
             }
 
             if (obs == null)
             {
-                spawnPos.y = groundY + obstacleYOffset;
+                spawnPos.y = obstacleYOffset;
                 obs = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                obs.transform.position = spawnPos + Vector3.up * 0.75f;
+                obs.transform.position = spawnPos;
                 obs.transform.localScale = Vector3.one * 1.5f;
                 obs.GetComponent<Renderer>().material.color = Color.red;
             }
@@ -209,17 +220,24 @@ public class MovementByHeadGame : MonoBehaviour
             foreach (float offset in laneOffsets)
             {
                 Vector3 spawnPos = startPos + (camForward * spawnDistance) + (camRight * offset);
-                spawnPos.y = groundY;
 
-                GameObject groundBlock;
-                if (groundBlockPrefab != null)
+                spawnPos.y = groundYOffset;
+
+                GameObject groundBlock = null;
+
+                if (groundBlockPrefabs != null && groundBlockPrefabs.Length > 0)
                 {
-                    groundBlock = Instantiate(groundBlockPrefab, spawnPos, groundBlockPrefab.transform.rotation);
-                    Vector3 newScale = groundBlock.transform.localScale;
-                    newScale.x *= groundWidthMultiplier;
-                    groundBlock.transform.localScale = newScale;
+                    GameObject selectedPrefab = groundBlockPrefabs[Random.Range(0, groundBlockPrefabs.Length)];
+                    if (selectedPrefab != null)
+                    {
+                        groundBlock = Instantiate(selectedPrefab, spawnPos, selectedPrefab.transform.rotation);
+                        Vector3 newScale = groundBlock.transform.localScale;
+                        newScale.x *= groundWidthMultiplier;
+                        groundBlock.transform.localScale = newScale;
+                    }
                 }
-                else
+
+                if (groundBlock == null)
                 {
                     groundBlock = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     groundBlock.transform.position = spawnPos;
@@ -268,6 +286,9 @@ public class MovementByHeadGame : MonoBehaviour
                 if (distSide < 0.9f && distUp < 1.4f && distForward < 0.9f)
                 {
                     isGameOver = true;
+
+                    Time.timeScale = 0f;
+
                     int finalScore = Mathf.FloorToInt(currentScore);
                     if (finalScore > maxScore)
                     {
@@ -283,7 +304,8 @@ public class MovementByHeadGame : MonoBehaviour
     private void SpawnScenery(float xOffset)
     {
         Vector3 spawnPos = startPos + (camForward * spawnDistance) + (camRight * xOffset);
-        spawnPos.y = fixedGroundY + groundYOffset;
+
+        spawnPos.y = groundYOffset;
 
         GameObject scenery = null;
         if (sceneryPrefabs != null && sceneryPrefabs.Length > 0)
@@ -299,7 +321,7 @@ public class MovementByHeadGame : MonoBehaviour
         if (scenery == null)
         {
             scenery = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            scenery.transform.position = spawnPos + Vector3.up * 1f;
+            scenery.transform.position = spawnPos;
             scenery.transform.localScale = new Vector3(0.5f, 2f, 0.5f);
             scenery.GetComponent<Renderer>().material.color = new Color(0.1f, 0.5f, 0.1f);
         }
@@ -348,7 +370,7 @@ public class MovementByHeadGame : MonoBehaviour
             GUI.skin.label.fontStyle = FontStyle.Normal;
             GUI.Label(new Rect(0, Screen.height / 2f + 90, Screen.width, 50), "Tekrar oynamak için ekrana tıkla");
         }
-        else if (MovementByHead.Instance.IsCalibrated)
+        else if (MovementByHead.Instance != null && MovementByHead.Instance.IsCalibrated)
         {
             GUI.skin.label.alignment = TextAnchor.UpperLeft;
             GUI.skin.label.fontSize = 28;

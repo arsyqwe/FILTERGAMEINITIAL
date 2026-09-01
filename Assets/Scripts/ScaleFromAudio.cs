@@ -3,6 +3,7 @@ using UnityEngine;
 public class ScaleFromAudio : MonoBehaviour
 {
     public AudioDetection detector;
+    public GameObject landingParticlePrefab;
 
     public float loudnessSens = 80f;
     public float threshold = 0.1f;
@@ -10,8 +11,24 @@ public class ScaleFromAudio : MonoBehaviour
     public float jumpMultiplier = 3f;
     public float maxJumpHeight = 6f;
 
-    public float jumpLerpSpeed = 15f; 
-    public float gravity = 40f; 
+    public float jumpLerpSpeed = 15f;
+    public float gravity = 40f;
+
+    public float scaleStiffness = 250f;
+    public float scaleDamping = 12f;
+
+    public float bounciness = 0.35f;    
+    public float bounceThreshold = 5f;   
+
+    public float wobbleStiffness = 300f; 
+    public float wobbleDamping = 15f;   
+
+    private Vector3 currentScale = Vector3.one;
+    private Vector3 targetScale = Vector3.one;
+    private Vector3 scaleVelocity = Vector3.zero;
+
+    private float currentWobbleAngle = 0f;
+    private float wobbleVelocity = 0f;
 
     private float baseY;
     private float currentY;
@@ -68,12 +85,65 @@ public class ScaleFromAudio : MonoBehaviour
 
                 if (currentY <= baseY)
                 {
-                    currentY = baseY;
-                    isJumping = false; 
+                    float impactForce = Mathf.Abs(verticalVelocity);
+
+                    float squashImpact = Mathf.Max(impactForce, 15f);
+                    scaleVelocity += new Vector3(squashImpact * 0.4f, -squashImpact * 0.8f, squashImpact * 0.4f);
+
+                    wobbleVelocity += Random.Range(-impactForce, impactForce) * 5f;
+
+                    if (landingParticlePrefab != null)
+                    {
+                        Vector3 particlePos = new Vector3(transform.position.x, baseY, transform.position.z);
+                        GameObject particle = Instantiate(landingParticlePrefab, particlePos, Quaternion.identity);
+                        Destroy(particle, 1f);
+                    }
+
+                    if (impactForce > bounceThreshold)
+                    {
+                        verticalVelocity = impactForce * bounciness;
+                        currentY = baseY + 0.05f; 
+                    }
+                    else
+                    {
+                        currentY = baseY;
+                        isJumping = false;
+                        verticalVelocity = 0f;
+                    }
                 }
             }
         }
 
         transform.position = new Vector3(transform.position.x, currentY, transform.position.z);
+
+        if (isJumping)
+        {
+            float currentSpeed = (!isFalling) ? (targetY - currentY) * jumpLerpSpeed : Mathf.Abs(verticalVelocity);
+            float stretch = Mathf.Clamp(currentSpeed * 0.04f, 0f, 0.6f);
+            targetScale = new Vector3(1f - (stretch * 0.4f), 1f + stretch, 1f - (stretch * 0.4f));
+        }
+        else
+        {
+            targetScale = Vector3.one;
+        }
+
+        Vector3 displacement = targetScale - currentScale;
+        Vector3 springForce = (displacement * scaleStiffness) - (scaleVelocity * scaleDamping);
+
+        scaleVelocity += springForce * Time.deltaTime;
+        currentScale += scaleVelocity * Time.deltaTime;
+        transform.localScale = currentScale;
+
+        float wobbleForce = (0f - currentWobbleAngle) * wobbleStiffness - (wobbleVelocity * wobbleDamping);
+        wobbleVelocity += wobbleForce * Time.deltaTime;
+        currentWobbleAngle += wobbleVelocity * Time.deltaTime;
+    }
+
+    void LateUpdate()
+    {
+        if (Mathf.Abs(currentWobbleAngle) > 0.01f)
+        {
+            transform.Rotate(0, 0, currentWobbleAngle);
+        }
     }
 }

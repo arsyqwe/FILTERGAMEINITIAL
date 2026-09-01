@@ -16,10 +16,10 @@ RenderSettings:
   serializedVersion: 10
   m_Fog: 0
   m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  m_FogMode: 1
+  m_FogMode: 3
   m_FogDensity: 0.01
-  m_LinearFogStart: 30
-  m_LinearFogEnd: 55
+  m_LinearFogStart: 0
+  m_LinearFogEnd: 300
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
@@ -331,7 +331,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 45
+  field of view: 60
   orthographic: 0
   orthographic size: 10
   m_Depth: -1
@@ -357,13 +357,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0.13052616, y: 0, z: 0, w: 0.9914449}
   m_LocalPosition: {x: 0, y: 4, z: -6}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 15, y: 0, z: 0}
 --- !u!114 &330585547
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -787,6 +787,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ddc48dfdd21d5574e872d1ed9d01165e, type: 3}
+--- !u!1 &648205633 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2269700585307468503, guid: ddc48dfdd21d5574e872d1ed9d01165e, type: 3}
+  m_PrefabInstance: {fileID: 1851440181812664079}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &686661412
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1199,12 +1204,7 @@ MonoBehaviour:
   obstaclePrefabs:
   - {fileID: 2045923454}
   - {fileID: 1920450347}
-  groundBlockPrefabs:
-  - {fileID: 2269700585307468503, guid: ddc48dfdd21d5574e872d1ed9d01165e, type: 3}
-  - {fileID: 3239338402541494190, guid: f21073f933bce02489883af31fefaf7f, type: 3}
-  - {fileID: 3955247334875620734, guid: e541487952e0b9f41aedf9ac3621a828, type: 3}
-  - {fileID: 6278053022890174962, guid: 75273d991510d01459c76f8ad0b30e8f, type: 3}
-  - {fileID: 1098220139269430648, guid: 3d18cd0707d83af44ab11e303ad0fea4, type: 3}
+  groundBlockPrefab: {fileID: 648205633}
   sceneryPrefabs: []
   invertAxis: 0
   aspectMultiplier: 3.5
@@ -1215,11 +1215,12 @@ MonoBehaviour:
   groundWidthMultiplier: 1.5
   groundBlockLength: 0.8
   groundYOffset: -0.8
-  obstacleYOffset: 0.16
-  tallObstacleYOffset: 0.42
+  obstacleYOffset: 0.8
+  tallObstacleYOffset: 1.1
   tiltMultiplier: 15
   spawnDistance: 55
   scenerySpawnDistance: 3.5
+  groundYLevel: 0
   spawnTimer: 0
   isGameOver: 0
   obstacles: []
@@ -1265,12 +1266,7 @@ MonoBehaviour:
   maxJumpHeight: 6
   jumpLerpSpeed: 8
   gravity: 35
-  scaleStiffness: 250
-  scaleDamping: 12
-  bounciness: 0.35
-  bounceThreshold: 5
-  wobbleStiffness: 300
-  wobbleDamping: 15
+  squashSpeed: 15
 --- !u!1001 &1495660695
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1813,7 +1809,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MovementByHeadGame
   obstaclePrefabs: []
-  groundBlockPrefabs: []
+  groundBlockPrefab: {fileID: 0}
   sceneryPrefabs: []
   invertAxis: 0
   aspectMultiplier: 3.5
@@ -1829,6 +1825,7 @@ MonoBehaviour:
   tiltMultiplier: 15
   spawnDistance: 55
   scenerySpawnDistance: 3.5
+  groundYLevel: 0
   spawnTimer: 0
   isGameOver: 0
   obstacles: []
@@ -1855,12 +1852,7 @@ MonoBehaviour:
   maxJumpHeight: 6
   jumpLerpSpeed: 8
   gravity: 35
-  scaleStiffness: 250
-  scaleDamping: 12
-  bounciness: 0.35
-  bounceThreshold: 5
-  wobbleStiffness: 300
-  wobbleDamping: 15
+  squashSpeed: 15
 --- !u!1 &1964602097
 GameObject:
   m_ObjectHideFlags: 0
@@ -2290,11 +2282,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5947784793591107622, guid: a070a87267fdfb74ab7eedb457070d3f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.221
+      value: -2.314
       objectReference: {fileID: 0}
     - target: {fileID: 5947784793591107622, guid: a070a87267fdfb74ab7eedb457070d3f, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 4.67
+      value: 1.4501903
       objectReference: {fileID: 0}
     - target: {fileID: 5947784793591107622, guid: a070a87267fdfb74ab7eedb457070d3f, type: 3}
       propertyPath: m_LocalRotation.w
@@ -2306,11 +2298,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5947784793591107622, guid: a070a87267fdfb74ab7eedb457070d3f, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 5947784793591107622, guid: a070a87267fdfb74ab7eedb457070d3f, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 5947784793591107622, guid: a070a87267fdfb74ab7eedb457070d3f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
