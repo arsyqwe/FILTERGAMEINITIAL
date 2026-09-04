@@ -6,22 +6,25 @@ public class ScaleFromAudio : MonoBehaviour
     public GameObject landingParticlePrefab;
 
     public float loudnessSens = 80f;
-    public float threshold = 0.1f;
+    public float threshold = 2f;
 
     public float jumpMultiplier = 3f;
     public float maxJumpHeight = 6f;
 
-    public float jumpLerpSpeed = 15f;
-    public float gravity = 40f;
+    public float jumpLerpSpeed = 8f;
+    public float gravity = 35f;
 
     public float scaleStiffness = 250f;
     public float scaleDamping = 12f;
 
-    public float bounciness = 0.35f;    
-    public float bounceThreshold = 5f;   
+    public float bounciness = 0.35f;
+    public float bounceThreshold = 5f;
 
-    public float wobbleStiffness = 300f; 
-    public float wobbleDamping = 15f;   
+    public float wobbleStiffness = 300f;
+    public float wobbleDamping = 15f;
+
+    public float hoverBobAmount = 0.15f;
+    public float hoverBobSpeed = 8f;
 
     private Vector3 currentScale = Vector3.one;
     private Vector3 targetScale = Vector3.one;
@@ -38,6 +41,8 @@ public class ScaleFromAudio : MonoBehaviour
     private bool isFalling = false;
     private float verticalVelocity = 0f;
 
+    private float yHoverVelocity = 0f;
+
     void Start()
     {
         baseY = transform.position.y;
@@ -46,39 +51,43 @@ public class ScaleFromAudio : MonoBehaviour
 
     void Update()
     {
+        float loudness = detector.GetLoudnessFromMicrpohone() * loudnessSens;
+
         if (!isJumping)
         {
-            float loudness = detector.GetLoudnessFromMicrpohone() * loudnessSens;
-
             if (loudness > threshold)
             {
                 isJumping = true;
                 isFalling = false;
-
-                targetY = baseY + (loudness * jumpMultiplier);
-                if (targetY > baseY + maxJumpHeight)
-                {
-                    targetY = baseY + maxJumpHeight;
-                }
-            }
-            else
-            {
-                currentY = baseY;
+                verticalVelocity = 0f;
             }
         }
         else
         {
-            if (!isFalling)
+            if (loudness > threshold)
             {
-                currentY = Mathf.Lerp(currentY, targetY, Time.deltaTime * jumpLerpSpeed);
+                isFalling = false;
 
-                if (Mathf.Abs(currentY - targetY) < 0.1f)
+                float baseTarget = baseY + (loudness * jumpMultiplier);
+                if (baseTarget > baseY + maxJumpHeight)
                 {
-                    isFalling = true;
-                    verticalVelocity = 0f;
+                    baseTarget = baseY + maxJumpHeight;
                 }
+
+                float bobbing = Mathf.Sin(Time.time * hoverBobSpeed) * hoverBobAmount;
+                targetY = baseTarget + bobbing;
+
+                float smoothTime = 1f / jumpLerpSpeed;
+                currentY = Mathf.SmoothDamp(currentY, targetY, ref yHoverVelocity, smoothTime);
+
+                verticalVelocity = 0f;
             }
             else
+            {
+                isFalling = true;
+            }
+
+            if (isFalling)
             {
                 verticalVelocity -= gravity * Time.deltaTime;
                 currentY += verticalVelocity * Time.deltaTime;
@@ -102,12 +111,13 @@ public class ScaleFromAudio : MonoBehaviour
                     if (impactForce > bounceThreshold)
                     {
                         verticalVelocity = impactForce * bounciness;
-                        currentY = baseY + 0.05f; 
+                        currentY = baseY + 0.05f;
                     }
                     else
                     {
                         currentY = baseY;
                         isJumping = false;
+                        isFalling = false;
                         verticalVelocity = 0f;
                     }
                 }
@@ -118,7 +128,7 @@ public class ScaleFromAudio : MonoBehaviour
 
         if (isJumping)
         {
-            float currentSpeed = (!isFalling) ? (targetY - currentY) * jumpLerpSpeed : Mathf.Abs(verticalVelocity);
+            float currentSpeed = (!isFalling) ? Mathf.Abs(yHoverVelocity) : Mathf.Abs(verticalVelocity);
             float stretch = Mathf.Clamp(currentSpeed * 0.04f, 0f, 0.6f);
             targetScale = new Vector3(1f - (stretch * 0.4f), 1f + stretch, 1f - (stretch * 0.4f));
         }
